@@ -5,10 +5,11 @@ const register = joi.object({
         .max(8)
         .required(),
     password: joi.string()
-        .pattern(/^[a-zA-Z0-9]{3,30}$/),
+        .pattern(/^[a-zA-Z0-9]{3,30}$/).required(),
     repeat_password: joi.ref('password'),
-    email: joi.string().email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } })
+    email: joi.string()
+        .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } }).required()
 })
-module.exports={
+module.exports = {
     register
 }
