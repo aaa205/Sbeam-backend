@@ -7,36 +7,75 @@ let pool = mysql.createPool({
     database: 'sbeam',
     connectionLimit: 5
 })
+let request = require('request')
 let express = require('express')
-let server = express()
+let app = express()
 let port = 80
-server.listen(port, () => {
+app.listen(port, () => {
     console.log('服务器正在监听:', port)
 
 })
 //根路径
 const root = '/api'
 //自定义中间件：允许指定客户端的跨域访问
-server.use((req, res, next) => {
+app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', 'http://localhost:8080')
-    res.set('Access-Control-Allow-Headers','Content-Type')
+    res.set('Access-Control-Allow-Headers', 'Content-Type')
     res.set('Access-Control-Allow-Methods', '*')
+    res.set('Access-Control-Allow-Credentials','true')
     next()//让后续的请求处理方法继续处理
 })
 //解析body
-const bodyParser=require('body-parser')
-server.use(bodyParser.json())
-server.use(bodyParser.urlencoded())
-
+const bodyParser = require('body-parser')
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded())
 /**
  * 引入数据检验
  */
 const schema = require('./validate')
+//引入session
+let session = require('express-session')
+app.use(session({
+    secret: '114514'
+}))
+//引入cookie
+let cookieParser = require('cookie-parser')
+app.use(cookieParser())
+/**
+ * 登录
+ */
+app.post(`${root}/login`, (req, resp) => {
+    let result = schema.login.validate(req.body)
+    if (result.error) {
+        //检验数据 如果数据不对则返回第一个错的信息
+        resp.json({ ret: 1, msg: data.error.details[0].message })
+        return
+    }
+    let user = result.value
+    let sql = 'SELECT id,name,avatar FROM sb_user WHERE email=? and password=?'
+    pool.query(sql, [user.email, user.password], (err, res) => {
+        if (err) {
+            resp.status(500).send('服务器炸了')
+            console.log(err.message)
+            return
+        }
+        if (res.length == 0) {
+            resp.json({ ret: 1, msg: '账户邮箱或密码错误' })
+        } else {
+            req.session.isLogin = true//表示已经登录
+            let option={httpOnly:false}
+            resp.cookie('userID', res[0].id,option)//保存用户信息
+            resp.cookie('userName', res[0].name,option)
+            resp.cookie('avatar',res[0].avatar,option)
+            resp.json({ ret: 0, msg: '登录成功' })
+        }
+    })
 
+})
 /**
  * 用户注册
  */
-server.post(`${root}/register`, (req, resp) => {
+app.post(`${root}/register`, (req, resp) => {
     let data = req.body
     data = schema.register.validate(data)//检验数据 注意数据在value里
     if (data.error) {
@@ -67,13 +106,13 @@ server.post(`${root}/register`, (req, resp) => {
             resp.json({ ret: 0, msg: '注册成功' })
         })
     })
-
 })
+
 
 /**
  * 获取所有GameCard的内容(前80个)
  */
-server.get(`${root}/games`, (req, resp) => {
+app.get(`${root}/games`, (req, resp) => {
     //id 为 6 的The Outer Worlds封面图有问题 先不用了
     let sql = 'SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE id !=6 LIMIT 80 '
     pool.query(sql, (err, res) => {
