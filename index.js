@@ -19,7 +19,7 @@ app.listen(port, () => {
 const root = '/api'
 //自定义中间件：允许指定客户端的跨域访问
 app.use((req, res, next) => {
-    res.set('Access-Control-Allow-Origin', 'http://localhost:8081')
+    res.set('Access-Control-Allow-Origin', 'http://localhost:8080')
     res.set('Access-Control-Allow-Headers', 'Content-Type')
     res.set('Access-Control-Allow-Methods', '*')
     res.set('Access-Control-Allow-Credentials', 'true')
@@ -107,26 +107,43 @@ app.post(`${root}/register`, (req, resp) => {
         })
     })
 })
+
 /**
- * 获取所有GameCard的内容(前80个)
+ * 搜索游戏
  */
 app.get(`${root}/games`, (req, resp) => {
-    //id 为 6 的The Outer Worlds封面图有问题 先不用了
-    let sql = 'SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE id !=6 LIMIT 80 '
-    pool.query(sql, (err, res) => {
-        if (err) {
-            resp.status(500).send('服务器炸了')
-            console.log(err.message)
-            return
-        }
-        resp.json(res)
-    })
+    let kw = req.query.kw//搜索关键词
+    //如果没有输入搜索关键词，则返回所有GameCard（最多80个）
+    if (typeof (kw) == "undefined" || kw == '') {
+        let sql = 'SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product LIMIT 80 '
+        pool.query(sql, (err, res) => {
+            if (err) {
+                resp.status(500).send('服务器炸了')
+                console.log(err.message)
+                return
+            }
+            resp.json(res)
+        })
+    } else {
+        //如果有搜索关键词，则执行搜索
+        kw = kw.trim()
+        let sql = "SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE name LIKE concat('%',?,'%') LIMIT 80 "
+        pool.query(sql, [kw], (err, res) => {
+            if (err) {
+                resp.status(500).send('服务器炸了')
+                console.log(err.message)
+                return
+            }
+            resp.json(res)
+        })
+    }
+
 })
 /**
  * 首页内容
  */
 app.get(`${root}/index`, (req, resp) => {
-    let sql='SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE id !=6 LIMIT 4'
+    let sql = 'SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product LIMIT 4'
     pool.query(sql, (err, res) => {
         if (err) {
             resp.status(500).send('服务器炸了')
