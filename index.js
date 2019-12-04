@@ -19,10 +19,10 @@ app.listen(port, () => {
 const root = '/api'
 //自定义中间件：允许指定客户端的跨域访问
 app.use((req, res, next) => {
-    res.set('Access-Control-Allow-Origin', 'http://localhost:8080')
+    res.set('Access-Control-Allow-Origin', 'http://localhost:8081')
     res.set('Access-Control-Allow-Headers', 'Content-Type')
     res.set('Access-Control-Allow-Methods', '*')
-    res.set('Access-Control-Allow-Credentials','true')
+    res.set('Access-Control-Allow-Credentials', 'true')
     next()//让后续的请求处理方法继续处理
 })
 //解析body
@@ -63,10 +63,10 @@ app.post(`${root}/login`, (req, resp) => {
             resp.json({ ret: 1, msg: '账户邮箱或密码错误' })
         } else {
             req.session.isLogin = true//表示已经登录
-            let option={httpOnly:false}
-            resp.cookie('userID', res[0].id,option)//保存用户信息
-            resp.cookie('userName', res[0].name,option)
-            resp.cookie('avatar',res[0].avatar,option)
+            let option = { httpOnly: false }
+            resp.cookie('userID', res[0].id, option)//保存用户信息
+            resp.cookie('userName', res[0].name, option)
+            resp.cookie('avatar', res[0].avatar, option)
             resp.json({ ret: 0, msg: '登录成功' })
         }
     })
@@ -107,14 +107,26 @@ app.post(`${root}/register`, (req, resp) => {
         })
     })
 })
-
-
 /**
  * 获取所有GameCard的内容(前80个)
  */
 app.get(`${root}/games`, (req, resp) => {
     //id 为 6 的The Outer Worlds封面图有问题 先不用了
     let sql = 'SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE id !=6 LIMIT 80 '
+    pool.query(sql, (err, res) => {
+        if (err) {
+            resp.status(500).send('服务器炸了')
+            console.log(err.message)
+            return
+        }
+        resp.json(res)
+    })
+})
+/**
+ * 首页内容
+ */
+app.get(`${root}/index`, (req, resp) => {
+    let sql='SELECT id,name,price,publisher,developer,card_img,logo_img FROM sb_product WHERE id !=6 LIMIT 4'
     pool.query(sql, (err, res) => {
         if (err) {
             resp.status(500).send('服务器炸了')
