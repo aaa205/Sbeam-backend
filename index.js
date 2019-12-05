@@ -67,6 +67,7 @@ app.post(`${root}/login`, (req, resp) => {
             resp.cookie('userID', res[0].id, option)//保存用户信息
             resp.cookie('userName', res[0].name, option)
             resp.cookie('avatar', res[0].avatar, option)
+            resp.cookie('isLogin', true)
             resp.json({ ret: 0, msg: '登录成功' })
         }
     })
@@ -103,7 +104,23 @@ app.post(`${root}/register`, (req, resp) => {
                 resp.status(500).send('服务器炸了')
                 throw err
             }
-            resp.json({ ret: 0, msg: '注册成功' })
+
+            req.session.isLogin = true//表示已经登录
+            let option = { httpOnly: false }
+            resp.cookie('userID', res.insertId, option)//保存用户信息
+            resp.cookie('userName', data.name, option)
+            resp.cookie('isLogin', true)
+            //获取头像
+            pool.query('SELECT avatar from sb_user WHERE id=?', [res.inserId], (err, res) => {
+                if (err) {
+                    resp.status(500).send('服务器炸了')
+                    throw err
+                }
+                if (res.length > 0)
+                    resp.cookie('avatar', res[0])
+                resp.json({ ret: 0, msg: '注册成功' })
+            })
+
         })
     })
 })
