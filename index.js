@@ -170,3 +170,43 @@ app.get(`${root}/index`, (req, resp) => {
         resp.json(res)
     })
 })
+/**
+ * 游戏详情
+ */
+app.get(`${root}/games/:id`, (req, resp) => {
+    let id = parseInt(req.params.id)
+    let sql = "SELECT id,name,description,price,release_date,\
+    developer,publisher,is_single_player,is_multi_player,is_cloud_save,\
+    supported_languages,logo_img,img_0,img_1,img_2,img_3\
+    FROM sb_product WHERE id = ?"
+    let data = {}
+    pool.query(sql, [id], (err, res) => {
+        if (err) {
+            resp.status(500).send('服务器炸了')
+            console.log(err.message)
+            return
+        }
+        if (res.length > 0) {
+            data = res[0]
+            sql = 'SELECT os_id,os,cpu,gpu,ram FROM sb_product_specification WHERE product_id = ?'
+            pool.query(sql, [id], (err, res) => {
+                if (err) {
+                    resp.status(500).send('服务器炸了')
+                    console.log(err.message)
+                    return
+                }
+                //如果查不到，给默认值
+                if (res.length == 0) {
+                    data.spec=[{os_id:0,os:"N/A",cpu:"N/A",gpu:"N/A",ram:"N/A"}]
+                } else {
+                    data.spec = res
+                }
+                resp.json(data)
+                return
+            })
+        } else {
+            //没查到
+            resp.status(404).send('资源不存在')
+        }
+    })
+})
