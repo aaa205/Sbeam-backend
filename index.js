@@ -62,7 +62,7 @@ app.post(`${root}/login`, (req, resp) => {
         if (res.length == 0) {
             resp.json({ ret: 1, msg: '账户邮箱或密码错误' })
         } else {
-            req.session.isLogin = true//表示已经登录
+            req.session.userID = res[0].id//表示已经登录
             let option = { httpOnly: false }
             resp.cookie('userID', res[0].id, option)//保存用户信息
             resp.cookie('userName', res[0].name, option)
@@ -104,8 +104,8 @@ app.post(`${root}/register`, (req, resp) => {
                 resp.status(500).send('服务器炸了')
                 throw err
             }
-
-            req.session.isLogin = true//表示已经登录
+           
+            req.session.userID = res[0].id//表示已经登录
             let option = { httpOnly: false }
             resp.cookie('userID', res.insertId, option)//保存用户信息
             resp.cookie('userName', data.name, option)
@@ -123,6 +123,14 @@ app.post(`${root}/register`, (req, resp) => {
 
         })
     })
+})
+/**
+ * 注销登录
+ */
+app.get(`${root}/logout`, (req, resp) => {
+    resp.cookie('isLogin',false)
+    req.session.destroy()//销毁session
+    resp.send()
 })
 
 /**
@@ -197,7 +205,7 @@ app.get(`${root}/games/:id`, (req, resp) => {
                 }
                 //如果查不到，给默认值
                 if (res.length == 0) {
-                    data.spec=[{os_id:0,os:"N/A",cpu:"N/A",gpu:"N/A",ram:"N/A"}]
+                    data.spec = [{ os_id: 0, os: "N/A", cpu: "N/A", gpu: "N/A", ram: "N/A" }]
                 } else {
                     data.spec = res
                 }
