@@ -104,7 +104,7 @@ app.post(`${root}/register`, (req, resp) => {
                 resp.status(500).send('服务器炸了')
                 throw err
             }
-           
+
             req.session.userID = res[0].id//表示已经登录
             let option = { httpOnly: false }
             resp.cookie('userID', res.insertId, option)//保存用户信息
@@ -128,7 +128,7 @@ app.post(`${root}/register`, (req, resp) => {
  * 注销登录
  */
 app.get(`${root}/logout`, (req, resp) => {
-    resp.cookie('isLogin',false)
+    resp.cookie('isLogin', false)
     req.session.destroy()//销毁session
     resp.send()
 })
@@ -217,4 +217,55 @@ app.get(`${root}/games/:id`, (req, resp) => {
             resp.status(404).send('资源不存在')
         }
     })
+})
+
+/**
+ * 添加到购物车,需要先登录
+ * 请求示例
+ * http://localhost/api/cart/addCartItems?add={"product_id":1,"quantity":2}
+ */
+app.get(`${root}/cart/addCartItems`, (req, resp) => {
+    let userID = req.session.userID
+    //没登录
+    if (!userID) {
+        resp.status(403).json({ ret: 1, msg: '请先登录' })
+        return
+    }
+    //{product_id,quantity}
+    let add = JSON.parse(req.query.add)
+    let sql0 = 'SELECT quantity FROM sb_cart WHERE user_id=? AND product_id=? '
+    let oldQuantity=0
+    pool.query(sql0, [userID, add.product_id], (err, res) => {
+        oldQuantity=res[0].quantity
+        //已在购物车，修改数量
+        if(err){
+            console.log(err.message)
+            resp.status(500).end()
+            return
+        }
+        if (res.length > 0) {
+            
+            pool.query('UPDATE sb_cart SET quantity=? WHERE user_id=? AND product_id=?',
+                [add.quantity+oldQuantity, userID, add.product_id], (err, res) => {
+                    if (err) {
+                        resp.json({ ret: 1, msg: 'fail' })
+                    } else {
+                        resp.json({ ret: 0, msg: "update success" })
+                    }
+                    return
+                })
+        } else {
+            //不在购物车，添加一行
+            pool.query('INSERT INTO sb_cart VALUES(?,?,?)', [userID, add.product_id, add.quantity], (err, res) => {
+                if (err) {
+                    resp.json({ ret: 1, msg: 'fail' })
+                } else {
+                    resp.json({ ret: 0, msg: "insert success" })
+                }
+                return
+            })
+
+        }
+    })
+
 })
