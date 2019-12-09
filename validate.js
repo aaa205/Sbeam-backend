@@ -16,6 +16,10 @@ const login = joi.object({
     password: joi.string()
         .pattern(/^[a-zA-Z0-9]{3,30}$/).required(),
 })
+const cartAdd=joi.object({
+    product_id:joi.number().required(),
+    quantity:joi.number().required()
+})
 module.exports = {
-    register,login
+    register,login,cartAdd
 }

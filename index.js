@@ -233,20 +233,25 @@ app.get(`${root}/cart/addCartItems`, (req, resp) => {
     }
     //{product_id,quantity}
     let add = JSON.parse(req.query.add)
+    let result = schema.cartAdd.validate(add)
+    if (result.error) {
+        //检验数据 如果数据不对则返回第一个错的信息
+        resp.json({ ret: 1, msg: data.error.details[0].message })
+        return
+    }
     let sql0 = 'SELECT quantity FROM sb_cart WHERE user_id=? AND product_id=? '
-    let oldQuantity=0
+    let oldQuantity = 0
     pool.query(sql0, [userID, add.product_id], (err, res) => {
-        oldQuantity=res[0].quantity
-        //已在购物车，修改数量
-        if(err){
+        if (err) {
             console.log(err.message)
             resp.status(500).end()
             return
         }
+        //已在购物车，修改数量
         if (res.length > 0) {
-            
+            oldQuantity = res[0].quantity
             pool.query('UPDATE sb_cart SET quantity=? WHERE user_id=? AND product_id=?',
-                [add.quantity+oldQuantity, userID, add.product_id], (err, res) => {
+                [add.quantity + oldQuantity, userID, add.product_id], (err, res) => {
                     if (err) {
                         resp.json({ ret: 1, msg: 'fail' })
                     } else {
@@ -268,4 +273,35 @@ app.get(`${root}/cart/addCartItems`, (req, resp) => {
         }
     })
 
+})
+
+/**
+ * 获取购物车的内容,需要登录
+ */
+app.get(`${root}/cart`, (req, resp) => {
+    let userID = req.session.userID
+    //没登录
+    if (!userID) {
+        resp.status(403).json({ ret: 1, msg: '请先登录' })
+        return
+    }
+    let sql = 'SELECT product_id FROM sb_cart WHERE user_id=?'
+    pool.query(sql, [userID], (err, res) => {
+        if (res.length == 0)
+            resp.json({ ret: 0, msg: '购物车为空', items: [] })
+        else {
+            let ids = res.map(i => i.product_id)//取出product_id
+            pool.query('SELECT id,name,description,price,logo_img,quantity \
+            FROM sb_product,sb_cart WHERE id IN (?) AND sb_cart.user_id=? AND sb_cart.product_id=id ',
+                [ids, userID], (err, res) => {
+                    if (err) {
+                        resp.status(500).send('服务器炸了')
+                        console.log(err.message)
+                        return
+                    }
+                    resp.json({ ret: 0, msg: 'success', items: res })
+                    return
+                })
+        }
+    })
 })
