@@ -445,3 +445,42 @@ app.post(`${root}/orders`, (req, resp) => {
         })
     })
 })
+
+/**
+ * 获取订单,仅限前80条，以后有空再加参数控制数据量
+ */
+app.get(`${root}/orders`, (req, resp) => {
+    let userID = req.session.userID
+    //没登录
+    if (!userID) {
+        resp.status(403).json({ ret: 2, msg: '请先登录' })
+        return
+    }
+    pool.query('SELECT id AS order_id,created_time FROM sb_order WHERE user_id=?', [userID], (err, res) => {
+        if (err) {
+            resp.json({ ret: 5, msg: "fail" })
+        } else {
+            if (res.length > 0) {
+                let orders = res
+                pool.query('SELECT id AS product_id,name,logo_img,description,quantity,price,order_id FROM sb_order_item WHERE order_id in (?) ',
+                    [orders.map(x => x.order_id)], (err, res) => {
+                        if (err) {
+                            resp.json({ ret: 5, msg: "fail" })
+                            return
+                        }
+                        //组合数据
+                        orders.forEach(order => {
+                            order.items = res.filter(x => { return x.order_id == order.order_id })
+                        })
+                        res.forEach(x => { delete x.order_id })
+                        resp.json({ret:0,msg:"success",orders:orders})
+                        return 
+                    })
+            } else {
+                resp.json({ ret: 0, msg: "empty", orders: [] })
+            }
+        }
+    })
+
+
+})
