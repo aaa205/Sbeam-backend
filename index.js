@@ -412,7 +412,6 @@ app.post(`${root}/orders`, (req, resp) => {
                                 let parms = res.map(i => {
                                     return [order_id, i.id, i.name, i.description, i.price, i.quantity, i.logo_img]
                                 })
-                                console.log(parms)
                                 con.query('INSERT INTO sb_order_item \
                                 (order_id,product_id,name,description,price,quantity,logo_img)\
                                 VALUES ?', [parms], (err) => {
@@ -423,19 +422,31 @@ app.post(`${root}/orders`, (req, resp) => {
                                             resp.status(500).send()
                                             return
                                         })
-                                    }
-                                    con.commit((e) => {
-                                        if (e) {
-                                            con.rollback(() => {
-                                                con.release();
-                                                resp.json({ ret: 5, msg: "fail" })
+                                    } else {
+                                        //删除购物车内容
+                                        con.query('DELETE FROM sb_cart WHERE user_id=? AND product_id IN (?)', [userID, ids], (err, res => {
+                                            if (err) {
+                                                con.rollback(() => {
+                                                    console.log(err.message)
+                                                    con.release()
+                                                    resp.status(500).send()
+                                                    return
+                                                })
+                                            }
+                                            con.commit((e) => {
+                                                if (e) {
+                                                    con.rollback(() => {
+                                                        con.release();
+                                                        resp.status(500).end()
+                                                    })
+                                                } else {
+                                                    con.release()
+                                                    resp.json({ ret: 0, msg: "success" })
+                                                    return
+                                                }
                                             })
-                                        } else {
-                                            con.release()
-                                            resp.json({ ret: 0, msg: "success" })
-                                            return
-                                        }
-                                    })
+                                        }))
+                                    }
                                 })
                             }
                         })
@@ -473,8 +484,8 @@ app.get(`${root}/orders`, (req, resp) => {
                             order.items = res.filter(x => { return x.order_id == order.order_id })
                         })
                         res.forEach(x => { delete x.order_id })
-                        resp.json({ret:0,msg:"success",orders:orders})
-                        return 
+                        resp.json({ ret: 0, msg: "success", orders: orders })
+                        return
                     })
             } else {
                 resp.json({ ret: 0, msg: "empty", orders: [] })
