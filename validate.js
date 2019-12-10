@@ -20,6 +20,11 @@ const cartAdd=joi.object({
     product_id:joi.number().required(),
     quantity:joi.number().required()
 })
+const asynUpdate=joi.object({
+    product_id:joi.number().required(),
+    quantity:joi.number().required(),
+    type:joi.string().required()
+})
 module.exports = {
-    register,login,cartAdd
+    register,login,cartAdd,asynUpdate
 }

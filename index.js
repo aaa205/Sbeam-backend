@@ -120,7 +120,6 @@ app.post(`${root}/register`, (req, resp) => {
                     resp.cookie('avatar', res[0])
                 resp.json({ ret: 0, msg: '注册成功' })
             })
-
         })
     })
 })
@@ -282,7 +281,7 @@ app.get(`${root}/cart`, (req, resp) => {
     let userID = req.session.userID
     //没登录
     if (!userID) {
-        resp.status(403).json({ ret: 1, msg: '请先登录' })
+        resp.status(403).json({ ret: 2, msg: '请先登录' })
         return
     }
     let sql = 'SELECT product_id FROM sb_cart WHERE user_id=?'
@@ -303,5 +302,146 @@ app.get(`${root}/cart`, (req, resp) => {
                     return
                 })
         }
+    })
+})
+
+/**
+ * 异步修改购物车表内容
+ * {product_id:1,quantity:2,type="update"}//更新
+ * {product_id:1,quantity:2,type="delete"}//删除 此时quantity参数不影响结果
+ */
+app.post(`${root}/cart/asynUpdate`, (req, resp) => {
+    let userID = req.session.userID
+    //没登录
+    if (!userID) {
+        resp.status(403).json({ ret: 2, msg: '请先登录' })
+        return
+    }
+    let data = req.body
+    if (schema.asynUpdate.validate(data).error) {
+        resp.json({ ret: 3, msg: 'invalid params' })
+        return
+    }
+    if (data.type === 'update') {
+        pool.query('UPDATE sb_cart SET quantity=?  WHERE user_id=? AND product_id=?',
+            [data.quantity, userID, data.product_id], (err, res) => {
+                if (err) {
+                    resp.json({ ret: 4, msg: 'update fail' })
+                } else {
+                    resp.json({ ret: 0, msg: 'success' })
+                }
+            })
+    } else if (data.type === 'delete') {
+        pool.query('DELETE FROM sb_cart WHERE user_id=? AND product_id=?',
+            [userID, data.product_id], (err, res) => {
+                if (err) {
+                    resp.json({ ret: 4, msg: { ret: 4, msg: 'delete fail' } })
+                } else {
+                    resp.json({ ret: 0, msg: 'success' })
+                }
+            })
+    } else
+        resp.json({ ret: 3, msg: 'invalid type' })
+    return
+})
+
+/**
+ * 提交订单
+ * {items:[{product_id,quantity}]}
+ */
+app.post(`${root}/orders`, (req, resp) => {
+    let userID = req.session.userID
+    //没登录
+    if (!userID) {
+        resp.status(403).json({ ret: 2, msg: '请先登录' })
+        return
+    }
+    //检验数据
+    let items = req.body.items
+    if (!items || items.length == 0) {
+        resp.status(400).send('need {items:[]}')
+        return
+    }
+    //建立订单,使用事务,写法太粗暴，以后改，呕了
+    pool.getConnection((err, con) => {
+        con.beginTransaction((error) => {
+            //失败 回滚
+            if (error) {
+                con.rollback(() => {
+                    con.release()
+                    resp.status(500).send()
+                    return
+                })
+            } else {
+                con.query('INSERT INTO sb_order VALUES(null,?,?)', [userID, Date.now()], (err, res) => {
+                    //失败回滚
+                    if (err) {
+                        con.rollback(() => {
+                            con.release()
+                            resp.status(500).send()
+                            return
+                        })
+                    } else {
+                        let order_id = res.insertId//订单id
+                        //查询即将插入的商品的信息
+                        let ids = items.map(x => x.product_id)
+                        con.query('SELECT id,name,description,price,logo_img FROM sb_product WHERE id IN (?)', [ids], (err, res) => {
+                            if (err) {
+                                con.rollback(() => {
+                                    con.release()
+                                    resp.status(500).send()
+                                })
+                            } else {
+                                //找到了所有信息,组合对象
+                                if (res.length == items.length) {
+                                    res.forEach(r => {
+                                        for (let i = 0; i < res.length; i++) {
+                                            if (r.id == items[i].product_id) {
+                                                r.quantity = items[i].quantity
+                                                break
+                                            }
+                                        }
+                                    })
+                                } else {
+                                    con.rollback(() => {
+                                        con.release()
+                                        resp.status(500).send('有商品不存在')
+                                    })
+                                }
+                                //此时res数组的对象包含了quantity,可以插入订单项
+                                let parms = res.map(i => {
+                                    return [order_id, i.id, i.name, i.description, i.price, i.quantity, i.logo_img]
+                                })
+                                console.log(parms)
+                                con.query('INSERT INTO sb_order_item \
+                                (order_id,product_id,name,description,price,quantity,logo_img)\
+                                VALUES ?', [parms], (err) => {
+                                    if (err) {
+                                        con.rollback(() => {
+                                            console.log(err.message)
+                                            con.release()
+                                            resp.status(500).send()
+                                            return
+                                        })
+                                    }
+                                    con.commit((e) => {
+                                        if (e) {
+                                            con.rollback(() => {
+                                                con.release();
+                                                resp.json({ ret: 5, msg: "fail" })
+                                            })
+                                        } else {
+                                            con.release()
+                                            resp.json({ ret: 0, msg: "success" })
+                                            return
+                                        }
+                                    })
+                                })
+                            }
+                        })
+                    }
+                })
+            }
+        })
     })
 })
